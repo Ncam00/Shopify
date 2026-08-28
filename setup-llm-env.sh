@@ -1,14 +1,23 @@
 #!/usr/bin/env bash
-# Creates a single central .env for LLM provider keys and wires it into zsh.
-# Safe to re-run: never overwrites an existing file, never duplicates the
-# .zshrc line. Writes placeholders only -- you fill in the real values.
+# Creates a single central .env for LLM provider keys and wires it into the
+# shell's startup file. Safe to re-run: never overwrites an existing file,
+# never duplicates the loader line. Writes placeholders only -- you fill in
+# the real values.
 
 set -euo pipefail
 
 ENV_DIR="$HOME/.config/llm"
 ENV_FILE="$ENV_DIR/.env"
-ZSHRC="$HOME/.zshrc"
 LOADER='set -a; [ -f ~/.config/llm/.env ] && source ~/.config/llm/.env; set +a'
+
+# Detect the login shell and pick the startup file it actually reads.
+# macOS Terminal starts login shells, so bash reads ~/.bash_profile (not
+# ~/.bashrc); zsh reads ~/.zshrc; fall back to ~/.profile for anything else.
+case "${SHELL##*/}" in
+  zsh)  RC_FILE="$HOME/.zshrc" ;;
+  bash) RC_FILE="$HOME/.bash_profile" ;;
+  *)    RC_FILE="$HOME/.profile" ;;
+esac
 
 mkdir -p "$ENV_DIR"
 chmod 700 "$ENV_DIR"
@@ -37,16 +46,16 @@ fi
 chmod 600 "$ENV_FILE"
 echo "==> Permissions set to 600 (owner read/write only)"
 
-touch "$ZSHRC"
-if grep -qF 'config/llm/.env' "$ZSHRC"; then
-  echo "==> Loader line already in $ZSHRC -- skipping."
+touch "$RC_FILE"
+if grep -qF 'config/llm/.env' "$RC_FILE"; then
+  echo "==> Loader line already in $RC_FILE -- skipping."
 else
   {
     echo ''
     echo '# Load LLM provider keys into the environment'
     echo "$LOADER"
-  } >> "$ZSHRC"
-  echo "==> Added loader line to $ZSHRC"
+  } >> "$RC_FILE"
+  echo "==> Added loader line to $RC_FILE"
 fi
 
 # Global gitignore so a stray .env can never be staged in any repo.
@@ -64,12 +73,12 @@ for pattern in '.env' '.env.local' '.env.*.local'; do
 done
 echo "==> Global gitignore covers .env patterns"
 
-cat <<'NEXT'
+cat <<NEXT
 
 Done. Next:
 
   1. Paste your real keys in:   nano ~/.config/llm/.env
-  2. Reload the shell:          source ~/.zshrc
+  2. Reload the shell:          source $RC_FILE
   3. Check they loaded:         ./verify-keys.sh
 
 NEXT
